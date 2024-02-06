@@ -1,39 +1,58 @@
-/* General styling for the to-do list container */
+/* Container for the todo cards */
 .todo-list {
-    max-width: 400px;
-    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    max-width: 600px;
+    margin: 20px auto;
+}
+
+/* Basic styling for each card */
+.todo-card {
+    background-color: #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
     padding: 20px;
-    background-color: #f9f9f9;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between; /* Ensures elements are spaced out */
 }
 
-/* Styling for the to-do list items */
-.todo-list ul {
-    list-style: none;
-    padding: 0;
+/* Container for checkbox and label */
+.task-info {
+    display: flex;
+    align-items: center;
+    flex-grow: 1; /* Allows the container to take up available space */
 }
 
-.todo-list li {
-    padding: 10px;
-    border-bottom: 1px solid #eee;
-}
-
-.todo-list li:last-child {
-    border-bottom: none;
-}
-
-/* Styling for the checkboxes and labels */
-.todo-list input[type="checkbox"] {
+/* Styling for the checkboxes */
+.task-info input[type="checkbox"] {
     margin-right: 10px;
 }
 
-.todo-list label {
+/* Styling for the labels */
+.task-info label {
     cursor: pointer;
 }
 
-/* Style for completed tasks */
-.todo-list input[type="checkbox"]:checked + label {
+/* Styling for the delete button */
+.delete-btn {
+    background-color: #ff6347; /* Tomato color, change as needed */
+    color: white;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 5px 8px;
+}
+
+/* Additional styling for hover effect on the button */
+.delete-btn:hover {
+    background-color: #e53e3e; /* Slightly darker for hover effect */
+}
+
+/* Style for completed task labels */
+.task-info input[type="checkbox"]:checked + label {
     text-decoration: line-through;
     color: #aaa;
 }

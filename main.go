@@ -3,50 +3,23 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
-	"github.com/nbd-wtf/go-nostr"
+	"github.com/dextryz/todo"
 )
 
-var ErrNotFound = errors.New("todo list not found")
-
-type config struct {
-	Nsec   string   `json:"nsec"`
-	Relays []string `json:"relays"`
-}
-
-type todo struct {
-	Id        string `json:"id"`
-	Content   string `json:"content"`
-	Done      bool   `json:"done"`
-	CreatedAt int64  `json:"created_at"`
-}
-
-type todoList struct {
-	Name  string `json:"name"`
-	Todos []todo `json:"todos"`
-}
-
 type handler struct {
-	config
-}
-
-func tagName(name string) string {
-	if name == "" {
-		return "nostr-todo"
-	}
-	return "nostr-todo-" + name
+	cfg *todo.Config
 }
 
 func (s *handler) remove(w http.ResponseWriter, r *http.Request) {
-}
 
-func (s *handler) home(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/item/")
 
 	tmpl, err := template.ParseFiles("index.html")
 	if err != nil {
@@ -54,27 +27,46 @@ func (s *handler) home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := context.Background()
+	switch r.Method {
+	case http.MethodDelete:
 
-	// Use configuration to pull todo list data from relays
-	pool := nostr.NewSimplePool(ctx)
-	filter := nostr.Filter{
-		Kinds: []int{nostr.KindApplicationSpecificData},
-		Tags: nostr.TagMap{
-			"d": []string{tagName("food")},
-		},
+		err := todo.Delete(context.Background(), s.cfg, id, "food")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Load list from set of relays
+		ctx := context.Background()
+		var tl todo.TodoList
+		err = tl.Load(ctx, s.cfg, "food")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		err = tmpl.ExecuteTemplate(w, "index.html", tl)
+		if err != nil {
+			fmt.Println("error executing template:", err)
+		}
+
+	default:
+		http.Error(w, "Unsupported method", http.StatusMethodNotAllowed)
 	}
+}
 
-	e := pool.QuerySingle(ctx, s.Relays, filter)
-	if e == nil {
-		http.Error(w, ErrNotFound.Error(), http.StatusInternalServerError)
+func (s *handler) list(w http.ResponseWriter, r *http.Request) {
+
+	tmpl, err := template.ParseFiles("index.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	tl := todoList{
-		Name: "Foodstr",
-	}
-	err = json.Unmarshal([]byte(e.Content), &tl.Todos)
+	// Load list from set of relays
+	ctx := context.Background()
+	var tl todo.TodoList
+	err = tl.Load(ctx, s.cfg, "food")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -98,19 +90,20 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var cfg config
+	var cfg todo.Config
 	err = json.Unmarshal(data, &cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	h := handler{
-		cfg,
+		&cfg,
 	}
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/", h.home)
+	mux.HandleFunc("/", h.list)
+	mux.HandleFunc("/item/", h.remove)
 
 	fs := http.FileServer(http.Dir("."))
 	mux.Handle("/style.css", fs)
