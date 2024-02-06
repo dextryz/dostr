@@ -27,7 +27,10 @@ type todo struct {
 	CreatedAt int64  `json:"created_at"`
 }
 
-type todoList []todo
+type todoList struct {
+	Name  string `json:"name"`
+	Todos []todo `json:"todos"`
+}
 
 type handler struct {
 	config
@@ -38,6 +41,9 @@ func tagName(name string) string {
 		return "nostr-todo"
 	}
 	return "nostr-todo-" + name
+}
+
+func (s *handler) remove(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *handler) home(w http.ResponseWriter, r *http.Request) {
@@ -65,8 +71,10 @@ func (s *handler) home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var tl todoList
-	err = json.Unmarshal([]byte(e.Content), &tl)
+	tl := todoList{
+		Name: "Foodstr",
+	}
+	err = json.Unmarshal([]byte(e.Content), &tl.Todos)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -103,6 +111,9 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", h.home)
+
+	fs := http.FileServer(http.Dir("."))
+	mux.Handle("/style.css", fs)
 
 	s := &http.Server{
 		Addr:    ":8080",

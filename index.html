@@ -1,14 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        <title></title>
+        <title>dostr</title>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <link href="css/style.css" rel="stylesheet">
+        <link href="style.css" rel="stylesheet">
+        <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     </head>
     <body>
-        {{ range . }}
-        <h1>{{ .Content }}</h1>
-        {{ end }}
+
+    <div class="todo-list">
+        <h2>{{ .Name }}</h2>
+        <ul>
+            {{ range .Todos }}
+            <li><input type="checkbox" id="{{ .Id }}"><label for="{{ .Id }}">{{ .Content }}</label></li>
+            {{ end }}
+        </ul>
+    </div>
+
     </body>
 </html>
