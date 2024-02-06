@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
     <head>
         <title>dostr</title>
         <meta charset="UTF-8">
@@ -7,8 +8,8 @@
         <link href="style.css" rel="stylesheet">
         <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     </head>
-    <body>
 
+    <body>
     <div class="todo-list">
 
         <h2>Food</h2>
@@ -16,18 +17,19 @@
         {{ range . }}
         <div class="todo-card">
             <div class="task-info">
-                <input type="checkbox" id="{{ .Id }}">
+                <input type="checkbox" id="{{ .Id }}"
+                    hx-post="/done/{{ .Id }}"
+                    hx-trigger="change">
                 <label for="{{ .Id }}">{{ .Content }}</label>
             </div>
             <button class="delete-btn" id="delete-btn"
                     hx-delete="/item/{{ .Id }}"
-                    hx-push-url="true"
                     hx-target="body">
                 Delete
             </button>
         </div>
         {{ end }}
-    </div>
 
+    </div>
     </body>
 </html>
