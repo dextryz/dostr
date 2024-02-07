@@ -14,43 +14,44 @@ import (
 )
 
 type handler struct {
+    // Relays config and secret key
 	cfg *todo.Config
+
+    // Use a pointer since we want to update the state (Done/Undone)
+    items map[string]*todo.Todo
 }
 
 func (s *handler) checked(w http.ResponseWriter, r *http.Request, id string) {
 
-	// Load list from set of relays
-	ctx := context.Background()
-	var tl todo.TodoList
-	err := tl.Load(ctx, s.cfg, "food")
-	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+    // Find item in cache
+	item, ok := s.items[id]
+    if !ok {
+        err := fmt.Errorf("item %s not found", id)
+        log.Println(err)
+    }
 
-	item := todo.Todo{}
-	for _, i := range tl {
-		if i.Id == id {
-			item = i
-		}
-	}
-
+    // Update the relays
 	if item.Done {
-		err := todo.Undone(context.Background(), s.cfg, "food", id)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+        go func() {
+            err := todo.Undone(context.Background(), s.cfg, "food", id)
+            if err != nil {
+                log.Println(err)
+                http.Error(w, err.Error(), http.StatusInternalServerError)
+                return
+            }
+        }()
 		item.Done = false
 	} else {
-		err := todo.Done(context.Background(), s.cfg, "food", id)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+        go func() {
+            log.Println("DONE - Start")
+            err := todo.Done(context.Background(), s.cfg, "food", id)
+            if err != nil {
+                log.Println(err)
+                http.Error(w, err.Error(), http.StatusInternalServerError)
+                return
+            }
+            log.Println("DONE - End")
+        }()
 		item.Done = true
 	}
 
@@ -61,30 +62,32 @@ func (s *handler) checked(w http.ResponseWriter, r *http.Request, id string) {
 		return
 	}
 	tmpl.Execute(w, item)
+
+    log.Println("Exit")
 }
 
 func (s *handler) remove(w http.ResponseWriter, r *http.Request, id string) {
 
+    // Delete the item from relays
 	err := todo.Delete(context.Background(), s.cfg, "food", id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Load list from set of relays
-	ctx := context.Background()
-	var tl todo.TodoList
-	err = tl.Load(ctx, s.cfg, "food")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+    // Delete the item from local cache
+    delete(s.items, id)
 
 	tmpl, err := template.ParseFiles("index.html", "item.html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+    var tl todo.TodoList
+    for _, v := range s.items {
+        tl = append(tl, *v)
+    }
 
 	err = tmpl.ExecuteTemplate(w, "index.html", tl)
 	if err != nil {
@@ -93,9 +96,7 @@ func (s *handler) remove(w http.ResponseWriter, r *http.Request, id string) {
 }
 
 func (s *handler) itemHandler(w http.ResponseWriter, r *http.Request) {
-
 	id := strings.TrimPrefix(r.URL.Path, "/item/")
-
 	switch r.Method {
 	case http.MethodPost:
 		s.checked(w, r, id)
@@ -108,16 +109,21 @@ func (s *handler) itemHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *handler) list(w http.ResponseWriter, r *http.Request) {
 
-	tmpl, err := template.ParseFiles("index.html", "item.html")
+	// Load list from set of relays
+	var tl todo.TodoList
+    err := tl.Load(context.Background(), s.cfg, "food")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Load list from set of relays
-	ctx := context.Background()
-	var tl todo.TodoList
-	err = tl.Load(ctx, s.cfg, "food")
+    // Cache loaded items
+    for _, v := range tl {
+        itemCopy := v
+        s.items[v.Id] = &itemCopy
+    }
+
+	tmpl, err := template.ParseFiles("index.html", "item.html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -148,7 +154,8 @@ func main() {
 	}
 
 	h := handler{
-		&cfg,
+        cfg: &cfg,
+        items: make(map[string]*todo.Todo),
 	}
 
 	mux := http.NewServeMux()
