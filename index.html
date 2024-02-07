@@ -12,7 +12,17 @@
     <body>
         <div class="todo-list">
             {{ range . }}
+            <div class="todo-card">
                 {{ template "item" . }}
+
+                <p>{{ .Content }}</p>
+
+                <button class="delete-btn" id="delete-btn"
+                        hx-delete="/item/{{ .Id }}"
+                        hx-target="body">
+                    Delete
+                </button>
+            </div>
             {{ end }}
         </div>
     </body>

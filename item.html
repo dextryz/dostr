@@ -5,14 +5,6 @@
     hx-trigger="click"
     hx-target="#item-{{ .Id }}"
     hx-swap="outerHTML">
-
-    <label for="{{ .Id }}">{{ .Content }}</label>
-
-    <button class="delete-btn" id="delete-btn"
-            hx-delete="/item/{{ .Id }}"
-            hx-target="body">
-        Delete
-    </button>
 </div>
 
 {{ end }}

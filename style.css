@@ -1,47 +1,77 @@
-/* Container for the todo cards */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    line-height: 1.5;
+}
+
+input, button, textarea, select {
+    font: inherit;
+}
+
+:root {
+    --clr-black: #1E2227;
+    --clr-dark: #323842;
+    --clr-green: #98C379;
+    --clr-red: #E06C75;
+    --clr-yellow: #E5C07B;
+    --clr-blue: #61AFEF;
+    --clr-pink: #C678DD;
+    --clr-cyan: #56B6C2;
+    --clr-white: #F6F7F9;
+    --clr-text: #ABB2BF;
+}
+
 .todo-list {
     display: flex;
     flex-direction: column;
     max-width: 600px;
-    margin: 20px auto;
+    margin: 25px auto;
+    gap: 1rem;
 }
 
-/* Basic styling for each card */
+.todo-card {
+    display: flex;
+    justify-content: space-around;
+    background-color: var(--clr-dark);
+    align-items: center;
+    padding: 1rem;
+    border-radius: 8px;
+}
+
+p {
+    color: var(--clr-text);
+}
+
 .todo-card-false {
-    background-color: #fff;
+    background-color: var(--clr-white);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    margin-bottom: 20px;
-    padding: 20px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between; /* Ensures elements are spaced out */
+    width: 30px; /* Size of the circle */
+    height: 30px; /* Size of the circle */
+    border-radius: 50%; /* This makes it round */
 }
 
-/* Basic styling for each card */
 .todo-card-true {
-    background-color: grey;
+    background-color: var(--clr-cyan);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    margin-bottom: 20px;
-    padding: 20px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between; /* Ensures elements are spaced out */
+    width: 30px; /* Size of the circle */
+    height: 30px; /* Size of the circle */
+    border-radius: 50%; /* This makes it round */
 }
 
-/* Styling for the delete button */
 .delete-btn {
-    background-color: #ff6347; /* Tomato color, change as needed */
+    background-color: var(--clr-red); /* Tomato color, change as needed */
     color: white;
     border: none;
-    border-radius: 50%;
+    border-radius: 5px;
     cursor: pointer;
     font-size: 16px;
     padding: 5px 8px;
 }
 
-/* Additional styling for hover effect on the button */
 .delete-btn:hover {
     background-color: #e53e3e; /* Slightly darker for hover effect */
 }

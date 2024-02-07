@@ -8,50 +8,63 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"sync"
+	"syscall"
+	"time"
 
 	"github.com/dextryz/todo"
 )
 
 type handler struct {
-    // Relays config and secret key
+	wg *sync.WaitGroup
+
+	mu sync.Mutex
+
+	// Relays config and secret key
 	cfg *todo.Config
 
-    // Use a pointer since we want to update the state (Done/Undone)
-    items map[string]*todo.Todo
+	// Use a pointer since we want to update the state (Done/Undone)
+	items map[string]*todo.Todo
+
+	errChan chan error
 }
 
 func (s *handler) checked(w http.ResponseWriter, r *http.Request, id string) {
 
-    // Find item in cache
+	// Find item in cache
 	item, ok := s.items[id]
-    if !ok {
-        err := fmt.Errorf("item %s not found", id)
-        log.Println(err)
-    }
+	if !ok {
+		err := fmt.Errorf("item %s not found", id)
+		log.Println(err)
+	}
 
-    // Update the relays
+	s.wg.Add(1)
+	// Update the relays
 	if item.Done {
-        go func() {
-            err := todo.Undone(context.Background(), s.cfg, "food", id)
-            if err != nil {
-                log.Println(err)
-                http.Error(w, err.Error(), http.StatusInternalServerError)
-                return
-            }
-        }()
+		go func() {
+			defer s.wg.Done()
+			s.mu.Lock()
+			err := todo.Undone(context.Background(), s.cfg, "food", id)
+			if err != nil {
+                s.errChan <- err
+				return
+			}
+			s.mu.Unlock()
+		}()
 		item.Done = false
 	} else {
-        go func() {
-            log.Println("DONE - Start")
-            err := todo.Done(context.Background(), s.cfg, "food", id)
-            if err != nil {
-                log.Println(err)
-                http.Error(w, err.Error(), http.StatusInternalServerError)
-                return
-            }
-            log.Println("DONE - End")
-        }()
+		go func() {
+			defer s.wg.Done()
+			s.mu.Lock()
+			err := todo.Done(context.Background(), s.cfg, "food", id)
+			if err != nil {
+                s.errChan <- err
+				return
+			}
+			s.mu.Unlock()
+		}()
 		item.Done = true
 	}
 
@@ -62,32 +75,36 @@ func (s *handler) checked(w http.ResponseWriter, r *http.Request, id string) {
 		return
 	}
 	tmpl.Execute(w, item)
-
-    log.Println("Exit")
 }
 
 func (s *handler) remove(w http.ResponseWriter, r *http.Request, id string) {
 
-    // Delete the item from relays
-	err := todo.Delete(context.Background(), s.cfg, "food", id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		// Delete the item from relays
+		s.mu.Lock()
+		if err := todo.Delete(context.Background(), s.cfg, "food", id); err != nil {
+			log.Printf("Deletion error: %v", err)
+			s.errChan <- err
+			return
+		}
+		log.Printf("deleting %s", id)
+		s.mu.Unlock()
+	}()
 
-    // Delete the item from local cache
-    delete(s.items, id)
+	// Safely delete the item from local cache
+	delete(s.items, id)
+
+	var tl todo.TodoList
+	for _, v := range s.items {
+		tl = append(tl, *v)
+	}
 
 	tmpl, err := template.ParseFiles("index.html", "item.html")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		s.errChan <- err
 	}
-
-    var tl todo.TodoList
-    for _, v := range s.items {
-        tl = append(tl, *v)
-    }
 
 	err = tmpl.ExecuteTemplate(w, "index.html", tl)
 	if err != nil {
@@ -111,17 +128,17 @@ func (s *handler) list(w http.ResponseWriter, r *http.Request) {
 
 	// Load list from set of relays
 	var tl todo.TodoList
-    err := tl.Load(context.Background(), s.cfg, "food")
+	err := tl.Load(context.Background(), s.cfg, "food")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-    // Cache loaded items
-    for _, v := range tl {
-        itemCopy := v
-        s.items[v.Id] = &itemCopy
-    }
+	// Cache loaded items
+	for _, v := range tl {
+		itemCopy := v
+		s.items[v.Id] = &itemCopy
+	}
 
 	tmpl, err := template.ParseFiles("index.html", "item.html")
 	if err != nil {
@@ -153,9 +170,14 @@ func main() {
 		log.Fatal(err)
 	}
 
+	var wg sync.WaitGroup
+
 	h := handler{
-        cfg: &cfg,
-        items: make(map[string]*todo.Todo),
+		wg:      &wg,
+		mu:      sync.Mutex{},
+		cfg:     &cfg,
+		items:   make(map[string]*todo.Todo),
+		errChan: make(chan error),
 	}
 
 	mux := http.NewServeMux()
@@ -171,8 +193,38 @@ func main() {
 		Handler: mux,
 	}
 
-	err = s.ListenAndServe()
-	if err != nil {
-		log.Fatal()
+	// Create a channel to listen for termination signals (e.g., Ctrl-C)
+	stop := make(chan os.Signal, 1)
+	// Catch termination signals
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	// Run the server in a goroutine so that it doesn't block
+	go func() {
+		if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
+		}
+	}()
+
+	// Wait for the goroutines to finish
+	h.wg.Wait()
+	close(h.errChan) // Close channel to signal completion
+
+	// Check for errors from goroutines
+	for err := range h.errChan {
+		if err != nil {
+			log.Fatalln(err)
+		}
 	}
+
+	// Wait for a termination signal
+	<-stop
+
+	// Attempt a graceful shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.Shutdown(ctx); err != nil {
+		log.Fatalf("Server Shutdown Failed:%+v", err)
+	}
+
+	log.Println("Server shutdown")
 }
