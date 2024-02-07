@@ -7,7 +7,7 @@
 }
 
 /* Basic styling for each card */
-.todo-card {
+.todo-card-false {
     background-color: #fff;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     margin-bottom: 20px;
@@ -18,21 +18,16 @@
     justify-content: space-between; /* Ensures elements are spaced out */
 }
 
-/* Container for checkbox and label */
-.task-info {
+/* Basic styling for each card */
+.todo-card-true {
+    background-color: grey;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    padding: 20px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
-    flex-grow: 1; /* Allows the container to take up available space */
-}
-
-/* Styling for the checkboxes */
-.task-info input[type="checkbox"] {
-    margin-right: 10px;
-}
-
-/* Styling for the labels */
-.task-info label {
-    cursor: pointer;
+    justify-content: space-between; /* Ensures elements are spaced out */
 }
 
 /* Styling for the delete button */
@@ -49,10 +44,4 @@
 /* Additional styling for hover effect on the button */
 .delete-btn:hover {
     background-color: #e53e3e; /* Slightly darker for hover effect */
-}
-
-/* Style for completed task labels */
-.task-info input[type="checkbox"]:checked + label {
-    text-decoration: line-through;
-    color: #aaa;
 }

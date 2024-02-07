@@ -10,26 +10,10 @@
     </head>
 
     <body>
-    <div class="todo-list">
-
-        <h2>Food</h2>
-
-        {{ range . }}
-        <div class="todo-card">
-            <div class="task-info">
-                <input type="checkbox" id="{{ .Id }}"
-                    hx-post="/done/{{ .Id }}"
-                    hx-trigger="change">
-                <label for="{{ .Id }}">{{ .Content }}</label>
-            </div>
-            <button class="delete-btn" id="delete-btn"
-                    hx-delete="/item/{{ .Id }}"
-                    hx-target="body">
-                Delete
-            </button>
+        <div class="todo-list">
+            {{ range . }}
+                {{ template "item" . }}
+            {{ end }}
         </div>
-        {{ end }}
-
-    </div>
     </body>
 </html>

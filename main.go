@@ -17,78 +17,90 @@ type handler struct {
 	cfg *todo.Config
 }
 
-func (s *handler) done(w http.ResponseWriter, r *http.Request) {
+func (s *handler) checked(w http.ResponseWriter, r *http.Request, id string) {
 
-	id := strings.TrimPrefix(r.URL.Path, "/done/")
-
-	tmpl, err := template.ParseFiles("index.html")
+	// Load list from set of relays
+	ctx := context.Background()
+	var tl todo.TodoList
+	err := tl.Load(ctx, s.cfg, "food")
 	if err != nil {
+		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	switch r.Method {
-	case http.MethodPost:
+	item := todo.Todo{}
+	for _, i := range tl {
+		if i.Id == id {
+			item = i
+		}
+	}
 
+	if item.Done {
+		err := todo.Undone(context.Background(), s.cfg, "food", id)
+		if err != nil {
+			log.Println(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		item.Done = false
+	} else {
 		err := todo.Done(context.Background(), s.cfg, "food", id)
 		if err != nil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-
-		// Load list from set of relays
-		ctx := context.Background()
-		var tl todo.TodoList
-		err = tl.Load(ctx, s.cfg, "food")
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		err = tmpl.ExecuteTemplate(w, "index.html", tl)
-		if err != nil {
-			fmt.Println("error executing template:", err)
-		}
-
-	default:
-		http.Error(w, "Unsupported method", http.StatusMethodNotAllowed)
+		item.Done = true
 	}
+
+	tmpl, err := template.ParseFiles("item.html")
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	tmpl.Execute(w, item)
 }
 
-func (s *handler) remove(w http.ResponseWriter, r *http.Request) {
+func (s *handler) remove(w http.ResponseWriter, r *http.Request, id string) {
 
-	id := strings.TrimPrefix(r.URL.Path, "/item/")
-
-	tmpl, err := template.ParseFiles("index.html")
+	err := todo.Delete(context.Background(), s.cfg, "food", id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// Load list from set of relays
+	ctx := context.Background()
+	var tl todo.TodoList
+	err = tl.Load(ctx, s.cfg, "food")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	tmpl, err := template.ParseFiles("index.html", "item.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = tmpl.ExecuteTemplate(w, "index.html", tl)
+	if err != nil {
+		fmt.Println("error executing template:", err)
+	}
+}
+
+func (s *handler) itemHandler(w http.ResponseWriter, r *http.Request) {
+
+	id := strings.TrimPrefix(r.URL.Path, "/item/")
+
 	switch r.Method {
+	case http.MethodPost:
+		s.checked(w, r, id)
 	case http.MethodDelete:
-
-		err := todo.Delete(context.Background(), s.cfg, "food", id)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// Load list from set of relays
-		ctx := context.Background()
-		var tl todo.TodoList
-		err = tl.Load(ctx, s.cfg, "food")
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		err = tmpl.ExecuteTemplate(w, "index.html", tl)
-		if err != nil {
-			fmt.Println("error executing template:", err)
-		}
-
+		s.remove(w, r, id)
 	default:
 		http.Error(w, "Unsupported method", http.StatusMethodNotAllowed)
 	}
@@ -96,7 +108,7 @@ func (s *handler) remove(w http.ResponseWriter, r *http.Request) {
 
 func (s *handler) list(w http.ResponseWriter, r *http.Request) {
 
-	tmpl, err := template.ParseFiles("index.html")
+	tmpl, err := template.ParseFiles("index.html", "item.html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -142,8 +154,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", h.list)
-	mux.HandleFunc("/done/", h.done)
-	mux.HandleFunc("/item/", h.remove)
+	mux.HandleFunc("/item/", h.itemHandler)
 
 	fs := http.FileServer(http.Dir("."))
 	mux.Handle("/style.css", fs)
